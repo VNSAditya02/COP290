@@ -1,5 +1,5 @@
 #
-# TODO: Teach Praneel how makefiles work
+# TODO: Teach Aditya how makefiles work
 # TODO: Include all TODOs here
 #
 
@@ -12,20 +12,20 @@ TARGET := bin/runner
 SRCEXT := cpp
 SOURCES := $(shell find $(SRCDIR) -type f -name *.$(SRCEXT))
 OBJECTS := $(patsubst $(SRCDIR)/%,$(BUILDDIR)/%,$(SOURCES:.$(SRCEXT)=.o))
-CFLAGS := -g # -Wall
-LIB := pthread -std=c++11 `pkg-config --cflags --libs opencv` -L lib -libboost_program-options
+CFLAGS := -g -O3 -flto -march=native -mtune=knl # -Wall
+LIB := -pthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options
 INC := -I include
 
 $(TARGET): $(OBJECTS)
-  @echo " Linking..."
-  @echo " $(CC) $^ -o $(TARGET) $(LIB)"; $(CC) $^ -o $(TARGET) $(LIB)
+	@echo	" Linking..."
+	@echo	" $(CC) $^ -o $(TARGET) $(LIB)"; $(CC) $^ -o $(TARGET) $(LIB)
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.$(SRCEXT)
-  @mkdir -p $(BUILDDIR)
-  @echo " $(CC) $(CFLAGS) $(INC) -c -o $@ $<"; $(CC) $(CFLAGS) $(INC) -c -o $@ $<
+	@mkdir -p $(BUILDDIR)
+	@echo " $(CC) $(CFLAGS) $(INC) -c -o $@ $<"; $(CC) $(CFLAGS) $(LIB) -c -o $@ $<
 
 clean:
-  @echo " Cleaning...";
-  @echo " $(RM) -r $(BUILDDIR) $(TARGET)"; $(RM) -r $(BUILDDIR) $(TARGET)
+	@echo " Cleaning...";
+	@echo " $(RM) -r $(BUILDDIR) $(TARGET)"; $(RM) -r $(BUILDDIR) $(TARGET)
 
 .PHONY: clean
