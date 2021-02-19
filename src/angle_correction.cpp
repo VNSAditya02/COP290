@@ -153,7 +153,11 @@ void project_crop(const Mat& img_src, const vector<Point2f>& src_pts, const vect
 	// We Can calculate these values from dest_pts but these values are constant as far as I know!
 	img_crop = img_warp(Rect(472, 52, 328, 778));
 
-	//Displays images
+	// Displays images
 	imshow("Warped Image: ", img_warp);
 	imshow("Cropped Image: ", img_crop);
+
+    // Saves output images to assests directory
+    imwrite("../assets/Wrapped Image.jpg", img_warp);
+    imwrite("../assets/Cropped Image.jpg", img_crop);
 }
