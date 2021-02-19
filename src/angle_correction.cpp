@@ -156,4 +156,5 @@ void project_crop(const Mat& img_src, const vector<Point2f>& src_pts, const vect
 	//Displays images
 	imshow("Warped Image: ", img_warp);
 	imshow("Cropped Image: ", img_crop);
+    imwrite("../assets/Wrapped Image.jpg", img_warp);
 }
