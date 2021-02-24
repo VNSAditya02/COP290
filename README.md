@@ -22,7 +22,7 @@ Allowed options:
 
 ### Using MakeFile
 1. From the project root, run `make`
-2. Type `bin\runner -f <path_to_image_input>` in terminal to run the application. The command line parameters have already been described in the previous section.
+2. Type `bin/runner -f <path_to_image_input>` in terminal to run the application. The command line parameters have already been described in the previous section.
 3. Type `make clean` to remove the generated build object files and executables
 
 ## Contributors
