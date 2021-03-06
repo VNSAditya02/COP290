@@ -1,5 +1,7 @@
 # Included by us
 cmake-build-debug
+assets/trafficvideo.mp4
+out
 
 # Ignore the build and lib dirs
 build

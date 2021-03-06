@@ -1,15 +1,29 @@
+/**
+ * @file traffic_density.cpp
+ *
+ * @brief This file outputs a warped and a cropped Homomorphised and greyscale version of the input RGB Image
+ *
+ * @ingroup COP290
+ *
+ * @authors Pratyush Pandey, VNS Aditya
+ * Contact: ee1170938@iitd.ac.in, cs5190471@iitd.ac.in
+ *
+ */
+
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <fstream> 
-#include <bits/stdc++.h> 
+#include <bits/stdc++.h>
+#include <boost/program_options.hpp>
 
 using namespace cv;
 using namespace std;
+namespace po = boost::program_options;
 
-int QueueDensity(string location);
+int QueueDensity(const string& location, int nth_frame);
 Mat CropImage(Mat frame);
 void FindDensity(vector<int> vec, string filename);
-int DynamicDensity(string location);
+int DynamicDensity(const string& location, int nth_frame);
 
 static void on_low_H_thresh_trackbar(int, void *);
 static void on_high_H_thresh_trackbar(int, void *);
@@ -19,41 +33,76 @@ static void on_low_V_thresh_trackbar(int, void *);
 static void on_high_V_thresh_trackbar(int, void *);
 
 // Used to find optimum values of inRange() function, line: 161
-const int max_value_H = 255;
-const int max_value = 255;
-const String window_capture_name = "Video Capture";
-const String window_detection_name = "Object Detection";
+const int MAX_VALUE_H = 255;
+const int MAX_VALUE = 255;
+const int VIDEO_FRAME_RATE = 15;
+const String WINDOW_CAPTURE_NAME = "Video Capture";
+const String WINDOW_DETECTION_NAME = "Object Detection";
+const String DYNAMIC_DENSITY_OUT = "out/DynamicDensity.txt";]
+const String QUEUE_DENSITY_OUT = "out/QueueDensity.txt";
+
 int low_H = 0, low_S = 0, low_V = 0;
-int high_H = max_value_H, high_S = max_value, high_V = max_value;
+int high_H = MAX_VALUE_H, high_S = MAX_VALUE, high_V = MAX_VALUE;
 
-// Main function
-// Location of the input video file has to be given by command line argument
+/**
+ * Location of the input video file has to be given by command line argument
+ * @param argc
+ * @param argv
+ * @return
+ */
 int main(int argc, char* argv[]) {
+    po::options_description desc("Allowed options");
+    string vid_file;
+    int nth_frame;
+    desc.add_options()
+            ("help,h", "Print help message")
+            ("file,f", po::value(&vid_file)->required(),"Path to Video file")
+            ("nframes,n", po::value<int>(&nth_frame)->default_value(3), "Decides FPS by processing every Nth frame of the video. Default Value: 3")
+            ;
+    po::variables_map vm;
+    try {
+        po::store(parse_command_line(argc, argv, desc), vm);
+        po::notify(vm);
+    }
+    catch(exception& e) {
+        cout << desc << "\n";
+        return 0;
+    }
 
-    QueueDensity(argv[1]);
+    if (vm.count("help")) {
+        cout << desc << "\n";
+        return 0;
+    }
+    auto t1 = chrono::high_resolution_clock::now();
+    QueueDensity(vid_file, nth_frame);
 
-    DynamicDensity(argv[1]);
+    auto t2 = chrono::high_resolution_clock::now();
+    cout << "Time taken by Static queue density: " <<
+    chrono::duration_cast<chrono::seconds>( t2 - t1 ).count()<<" s\n";
+
+    DynamicDensity(vid_file, nth_frame);
+    auto t3 = chrono::high_resolution_clock::now();
+    cout << "Time taken by Dynamic queue density: " <<
+         chrono::duration_cast<chrono::seconds>( t3 - t2 ).count()<<" s\n";
 
     return 0;
 }
 
-/*
-@ param location: location where video file is located
-Finds the density of moving objects
-*/
-
-int DynamicDensity(string location){
+/**
+ *
+ * @param location : location where video file is located
+ * @param nth_frame
+ * @return Finds the density of moving objects
+ */
+int DynamicDensity(const string& location, int nth_frame){
 
     // Opens the video file
     VideoCapture capture(location);
 
     // If not able to open the video file, exit the program
     if (!capture.isOpened()){
-
         cout << "Unable to open the video file" << endl;
-
         cin.get();
-
         return -1;
     }
 
@@ -67,7 +116,7 @@ int DynamicDensity(string location){
     // frame_1 stores the previous frame
     Mat frame, frame_1;
 
-    // read the previous framr
+    // read the previous frame
     capture >> frame;
 
     // Crop the previous frame
@@ -75,48 +124,41 @@ int DynamicDensity(string location){
 
     // Subtract the background
     backSub -> apply(frame, frame_1);
-    
+
     // Stores the output values
     vector <int> y;
 
-    while(true){
-
+    while(true)
+    {
         // frame_2 is the current frame
-        // frame_threshold is the output frame which detects moving objects  
+        // frame_threshold is the output frame which detects moving objects
         Mat frame2, frame_2, frame_threshold, out, magnitude, angle, magn_norm;
 
         vector<vector<Point> > contours;
-        
         vector<Vec4i> hierarchy;
 
         // Change the condition accordingly, i % 1 process every frame, i % 3 process every third frame
-        if (i % 1 == 0){
-
+        if (i % nth_frame == 0){
             // Read the current frame
             capture >> frame2;
-
             // If frame is empty, exit the loop
             if (frame2.empty()){
-
                 break;
-
             }
-
             // Crop the present frame
             frame2 = CropImage(frame2);
-            
 
             // Uncomment the following lines to change the values in Line: 161; inRange() function
 
             /*
-            namedWindow(window_capture_name);
-            namedWindow(window_detection_name);
-            createTrackbar("Low H", window_detection_name, &low_H, max_value_H, on_low_H_thresh_trackbar);
-            createTrackbar("High H", window_detection_name, &high_H, max_value_H, on_high_H_thresh_trackbar);
-            createTrackbar("Low S", window_detection_name, &low_S, max_value, on_low_S_thresh_trackbar);
-            createTrackbar("High S", window_detection_name, &high_S, max_value, on_high_S_thresh_trackbar);
-            createTrackbar("Low V", window_detection_name, &low_V, max_value, on_low_V_thresh_trackbar);
-            createTrackbar("High V", window_detection_name, &high_V, max_value, on_high_V_thresh_trackbar);
+            namedWindow(WINDOW_CAPTURE_NAME);
+            namedWindow(WINDOW_DETECTION_NAME);
+            createTrackbar("Low H", WINDOW_DETECTION_NAME, &low_H, MAX_VALUE_H, on_low_H_thresh_trackbar);
+            createTrackbar("High H", WINDOW_DETECTION_NAME, &high_H, MAX_VALUE_H, on_high_H_thresh_trackbar);
+            createTrackbar("Low S", WINDOW_DETECTION_NAME, &low_S, MAX_VALUE, on_low_S_thresh_trackbar);
+            createTrackbar("High S", WINDOW_DETECTION_NAME, &high_S, MAX_VALUE, on_high_S_thresh_trackbar);
+            createTrackbar("Low V", WINDOW_DETECTION_NAME, &low_V, MAX_VALUE, on_low_V_thresh_trackbar);
+            createTrackbar("High V", WINDOW_DETECTION_NAME, &high_V, MAX_VALUE, on_high_V_thresh_trackbar);
             */
 
             // flow stores
@@ -127,7 +169,7 @@ int DynamicDensity(string location){
 
             // Computes the optical flow between frames
             calcOpticalFlowFarneback(frame_1, frame_2, optflow, 0.5, 3, 15, 3, 5, 1.2, 0);
-                 
+
             Mat flow_parts[2];
 
             // Splits optflow into two parts
@@ -139,7 +181,6 @@ int DynamicDensity(string location){
             // Normalizes the magnitude
             normalize(magnitude, magn_norm, 0.0f, 1.0f, NORM_MINMAX);
 
-            // 
             angle *= ((1.f / 360.f) * (180.f / 255.f));
 
             //builds hsv image
@@ -171,41 +212,31 @@ int DynamicDensity(string location){
 
             // Current slides becomes next slide for the next iteration
             frame_1 = frame_2;
-            
-            
         }
-
-        else{
-
+        else
             capture >> frame_2;
-        }
-        
-        i = i + 1;
+        i++;
     }
-    
     // Find density of the output value
-    FindDensity(y, "DynamicDensity.txt");
-
+    FindDensity(y, DYNAMIC_DENSITY_OUT);
     return 0;
-
 }
 
-/*
-@ param location: location of the video file
-*/
-
-int QueueDensity(string location){
+ /**
+  *
+  * @param location : location of the video file
+  * @param nth_frame
+  * @return
+  */
+int QueueDensity(const string& location, int nth_frame){
 
     // Opens the video file
     VideoCapture capture(location);
 
     // If not able to open the video file, exit the program
     if (!capture.isOpened()){
-
         cout << "Unable to open the video file" << endl;
-
         cin.get();
-
         return -1;
     }
 
@@ -220,23 +251,19 @@ int QueueDensity(string location){
     // Stores the value of no of contours in a frame
     std::vector<int> y;
 
-    while (true){
-
+    while (true)
+    {
         vector<vector<Point> > contours;
-
         vector<Vec4i> hierarchy;
-        
         // Change the condition accordingly, i % 1 process every frame, i % 3 process every third frame
-        if (i % 1 == 0){
-
+        if (i % nth_frame == 0)
+        {
             // If true, read the frame
             capture >> frame;
-            
-            // If the frame is empty, exit the loop
-            if (frame.empty()){
 
+            // If the frame is empty, exit the loop
+            if (frame.empty())
                 break;
-            }
 
             // Finds the cropped image of the given frame
             frame = CropImage(frame);
@@ -249,27 +276,25 @@ int QueueDensity(string location){
             
             // Add the contours size to y
             y.push_back(contours.size());
-            //cout << contours.size() << endl;
+            // cout << contours.size() << endl;
         }
-
-        else{
-
+        else
             capture >> frame;
-        }
         
-        i = i + 1;
+        i++;
     }
 
     // Calls Density function
-    FindDensity(y, "QueueDensity.txt");
+    FindDensity(y, QUEUE_DENSITY_OUT);
 
     return 0;
 }
 
-/*
-@param frame: frame to be cropped
-// Given a frame, this function crops and outputs the cropped frame
-*/
+/**
+ * Given a frame, this function crops and outputs the cropped frame
+ * @param frame
+ * @return : frame to be cropped
+ */
 Mat CropImage(Mat frame){
 
     // Stores the wrapped image
@@ -284,10 +309,10 @@ Mat CropImage(Mat frame){
 
     // This part of the image is our area of interest. I approximated these points
     vector<Point2f> src_pts;
-    src_pts.push_back(Point2f(1000, 216));
-    src_pts.push_back(Point2f(286, 1060));
-    src_pts.push_back(Point2f(1552, 1070));
-    src_pts.push_back(Point2f(1264, 200));
+    src_pts.emplace_back(1000, 216);
+    src_pts.emplace_back(286, 1060);
+    src_pts.emplace_back(1552, 1070);
+    src_pts.emplace_back(1264, 200);
 
     // Finding Homography between the points
     Mat homography = findHomography(src_pts, dest_pts);
@@ -303,13 +328,12 @@ Mat CropImage(Mat frame){
     return img_crop;
 }
 
-/*
-@param vec: integer Vector
-@param filename: name of the file in which output is to be stored
-Finds the Density of the given values and stores it in the output file
-*/
+/**
+ * Finds the Density of the given values and stores it in the output file
+ * @param y : integer Vector
+ * @param filename : name of the file in which output is to be stored
+ */
 void FindDensity(vector<int> y, string filename){
-
     // Stores the maximum value of the vector
     int max_val = *max_element(y.begin(), y.end());
 
@@ -323,10 +347,8 @@ void FindDensity(vector<int> y, string filename){
     ofstream MyFile(filename);
 
     // Traverse the vector and find the normalized values
-    for (int it: y){
-
+    for (int it: y) {
         z = (double)(it - min_val)/(double)range;
-
         MyFile << z << endl;
     }
 
@@ -344,30 +366,30 @@ NOTE : I copy pasted these functions from a website, just to find optimum values
 static void on_low_H_thresh_trackbar(int, void *)
 {
     low_H = min(high_H-1, low_H);
-    setTrackbarPos("Low H", window_detection_name, low_H);
+    setTrackbarPos("Low H", WINDOW_DETECTION_NAME, low_H);
 }
 static void on_high_H_thresh_trackbar(int, void *)
 {
     high_H = max(high_H, low_H+1);
-    setTrackbarPos("High H", window_detection_name, high_H);
+    setTrackbarPos("High H", WINDOW_DETECTION_NAME, high_H);
 }
 static void on_low_S_thresh_trackbar(int, void *)
 {
     low_S = min(high_S-1, low_S);
-    setTrackbarPos("Low S", window_detection_name, low_S);
+    setTrackbarPos("Low S", WINDOW_DETECTION_NAME, low_S);
 }
 static void on_high_S_thresh_trackbar(int, void *)
 {
     high_S = max(high_S, low_S+1);
-    setTrackbarPos("High S", window_detection_name, high_S);
+    setTrackbarPos("High S", WINDOW_DETECTION_NAME, high_S);
 }
 static void on_low_V_thresh_trackbar(int, void *)
 {
     low_V = min(high_V-1, low_V);
-    setTrackbarPos("Low V", window_detection_name, low_V);
+    setTrackbarPos("Low V", WINDOW_DETECTION_NAME, low_V);
 }
 static void on_high_V_thresh_trackbar(int, void *)
 {
     high_V = max(high_V, low_V+1);
-    setTrackbarPos("High V", window_detection_name, high_V);
+    setTrackbarPos("High V", WINDOW_DETECTION_NAME, high_V);
 }

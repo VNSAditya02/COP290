@@ -3,7 +3,7 @@ project(COP290)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(COP290 src/angle_correction.cpp)
+add_executable(COP290 src/angle_correction.cpp src/traffic_density.cpp)
 find_package( OpenCV REQUIRED )
 include_directories(${OpenCV_INCLUDE_DIRS})
 target_link_libraries( ${PROJECT_NAME} ${OpenCV_LIBS} )

@@ -1,5 +1,4 @@
 #
-# TODO: Teach Aditya how makefiles work
 # TODO: Include all TODOs here
 #
 
