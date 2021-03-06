@@ -60,11 +60,14 @@ int high_H = MAX_VALUE_H, high_S = MAX_VALUE, high_V = MAX_VALUE;
 int main(int argc, char* argv[]) {
     po::options_description desc("Allowed options");
     string vid_file;
-    int nth_frame;
+    int nth_frame, parallel;
     desc.add_options()
             ("help,h", "Print help message")
             ("file,f", po::value(&vid_file)->required(),"Path to Video file")
-            ("nframes,n", po::value<int>(&nth_frame)->default_value(3), "Decides FPS by processing every Nth frame of the video. Default Value: 3")
+            ("nframes,n", po::value<int>(&nth_frame)->default_value(3), "Decides FPS by processing "
+                                                                        "every Nth frame of the video. Default Value: 3")
+            ("threads,t", po::value<int>(&parallel)->default_value(0), "Set 1 for Parallel execution "
+                                   "using OpenMP and 0 for Serial Execution. Default Value: 0. Type export OMP_NUM_THREADS=2 in terminal before compiling.")
             ;
     po::variables_map vm;
     try {
@@ -81,24 +84,43 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    // Create directory for outfiles if it doesn't exist, else ignore
     experimental::filesystem::path dir(OUT_PATH);
     if(!(experimental::filesystem::exists(dir))){
         if (experimental::filesystem::create_directory(dir))
             cout << "Created out directory successfully!" << endl;
     }
 
+    // start time
     auto t1 = chrono::high_resolution_clock::now();
-    QueueDensity(vid_file, nth_frame);
 
-    auto t2 = chrono::high_resolution_clock::now();
-    cout << "Time taken by Static queue density: " <<
-    chrono::duration_cast<chrono::seconds>( t2 - t1 ).count()<<" s\n";
+    if(parallel == 0) { // Serial code execution
+        QueueDensity(vid_file, nth_frame);
 
-    DynamicDensity(vid_file, nth_frame);
-    auto t3 = chrono::high_resolution_clock::now();
-    cout << "Time taken by Dynamic queue density: " <<
-         chrono::duration_cast<chrono::seconds>( t3 - t2 ).count()<<" s\n";
+        auto t2 = chrono::high_resolution_clock::now();
+        cout << "Time taken by Static queue density: " <<
+             chrono::duration_cast<chrono::seconds>(t2 - t1).count() << " s\n";
 
+        DynamicDensity(vid_file, nth_frame);
+        auto t3 = chrono::high_resolution_clock::now();
+        cout << "Time taken by Dynamic queue density: " <<
+             chrono::duration_cast<chrono::seconds>(t3 - t2).count() << " s\n";
+    }
+    else { // OpenMP to Parallise function execution. Input export OMP_NUM_THREADS=2 to use
+        #pragma omp parallel default(none) shared(vid_file, nth_frame)
+        #pragma omp single
+        {
+            #pragma omp task
+            QueueDensity(vid_file, nth_frame);
+
+            #pragma omp task
+            DynamicDensity(vid_file, nth_frame);
+        }
+
+        auto t2 = chrono::high_resolution_clock::now();
+        cout << "Time taken for Parallelised Execution: " <<
+             chrono::duration_cast<chrono::seconds>( t2 - t1 ).count()<<" s\n";
+    }
     writeOut();
 
     return 0;
