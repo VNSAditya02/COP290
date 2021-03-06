@@ -15,6 +15,7 @@
 #include <fstream> 
 #include <bits/stdc++.h>
 #include <boost/program_options.hpp>
+#include <experimental/filesystem>
 
 using namespace cv;
 using namespace std;
@@ -22,8 +23,9 @@ namespace po = boost::program_options;
 
 int QueueDensity(const string& location, int nth_frame);
 Mat CropImage(Mat frame);
-void FindDensity(vector<int> vec, string filename);
+void findDensity(vector<int> y, string filename);
 int DynamicDensity(const string& location, int nth_frame);
+int writeOut();
 
 static void on_low_H_thresh_trackbar(int, void *);
 static void on_high_H_thresh_trackbar(int, void *);
@@ -38,8 +40,13 @@ const int MAX_VALUE = 255;
 const int VIDEO_FRAME_RATE = 15;
 const String WINDOW_CAPTURE_NAME = "Video Capture";
 const String WINDOW_DETECTION_NAME = "Object Detection";
-const String DYNAMIC_DENSITY_OUT = "out/DynamicDensity.txt";]
-const String QUEUE_DENSITY_OUT = "out/QueueDensity.txt";
+const String OUT_PATH = "out";
+const char pathSeparator =
+#ifdef _WIN32
+        '\\';
+#else
+        '/';
+#endif
 
 int low_H = 0, low_S = 0, low_V = 0;
 int high_H = MAX_VALUE_H, high_S = MAX_VALUE, high_V = MAX_VALUE;
@@ -73,6 +80,13 @@ int main(int argc, char* argv[]) {
         cout << desc << "\n";
         return 0;
     }
+
+    experimental::filesystem::path dir(OUT_PATH);
+    if(!(experimental::filesystem::exists(dir))){
+        if (experimental::filesystem::create_directory(dir))
+            cout << "Created out directory successfully!" << endl;
+    }
+
     auto t1 = chrono::high_resolution_clock::now();
     QueueDensity(vid_file, nth_frame);
 
@@ -84,6 +98,8 @@ int main(int argc, char* argv[]) {
     auto t3 = chrono::high_resolution_clock::now();
     cout << "Time taken by Dynamic queue density: " <<
          chrono::duration_cast<chrono::seconds>( t3 - t2 ).count()<<" s\n";
+
+    writeOut();
 
     return 0;
 }
@@ -218,7 +234,7 @@ int DynamicDensity(const string& location, int nth_frame){
         i++;
     }
     // Find density of the output value
-    FindDensity(y, DYNAMIC_DENSITY_OUT);
+    findDensity(y, OUT_PATH + pathSeparator + "DynamicDensity.txt");
     return 0;
 }
 
@@ -285,7 +301,7 @@ int QueueDensity(const string& location, int nth_frame){
     }
 
     // Calls Density function
-    FindDensity(y, QUEUE_DENSITY_OUT);
+     findDensity(y, OUT_PATH + pathSeparator + "QueueDensity.txt");
 
     return 0;
 }
@@ -333,7 +349,7 @@ Mat CropImage(Mat frame){
  * @param y : integer Vector
  * @param filename : name of the file in which output is to be stored
  */
-void FindDensity(vector<int> y, string filename){
+void findDensity(vector<int> y, string filename){
     // Stores the maximum value of the vector
     int max_val = *max_element(y.begin(), y.end());
 
@@ -354,6 +370,43 @@ void FindDensity(vector<int> y, string filename){
 
     // Closes the output file
     MyFile.close();
+}
+
+/**
+ * This methods writes the values to out.csv
+ * @return
+ */
+int writeOut() {
+    ofstream out_file(OUT_PATH + pathSeparator + "out.csv");
+    ifstream queue(OUT_PATH + pathSeparator + "QueueDensity.txt");
+    ifstream dynamic(OUT_PATH + pathSeparator + "DynamicDensity.txt");
+    out_file << "framenum, queue density, dynamic density\n";
+    cout << "framenum, queue density, dynamic density\n";
+    int i=0;
+
+    if (!queue || !dynamic)
+    {
+        std::cout << "Error opening file " << (queue ? "Dynamic": "Queue") << ": " << strerror(errno) << '\n';
+        return 1;
+    }
+
+    do
+    {
+        string line1, line2;
+        if(!getline(queue, line1))
+            line1 = "0";
+        if(!getline(dynamic, line2))
+            line2 = "0";
+        string res = to_string(i) + ", " + line1 + ", " + line2 + "\n";
+        cout << res;
+        out_file << res;
+        i++;
+    } while(queue || dynamic);
+
+    out_file.close();
+    queue.close();
+    dynamic.close();
+    return 0;
 }
 
 /*
