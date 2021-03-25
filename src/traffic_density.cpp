@@ -171,11 +171,11 @@ int DynamicDensity(const string& location, int nth_frame){
             int rows = out.rows;
             int cols = out.cols;
 
-            // Counts no of pixels whose pixel value is greater than 10
-            double count_pix = count(out, rows, cols, 10);
+            // Counts no of pixels whose pixel value is greater than 20
+            double count_pix = count(out, rows, cols, 20);
 
             // Add the output to the output vector
-            y.push_back(count_pix);
+            y.push_back(count_pix*1.5);
 
             // Changes current frame to previous frame
             frame = frame2;
