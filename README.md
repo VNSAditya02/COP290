@@ -43,6 +43,17 @@ Assignment 1 for the course COP290. Details can be found [here](https://www.cse.
     ```
 4. Output files are stored in out folder in the project root 
 
+### Part 3: partc.cpp
+1.     ```
+    g++ src/partc.cpp -o build/partc -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs -fopenmp
+    ```
+2. Execute the program via `build/partc -f <path to video> -n <number of frames to skip> -t [0|1] -x <no of threads>`.
+
+3. ```
+    g++ src/partd.cpp -o build/partd -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs -fopenmp
+    ```
+2. Execute the program via `build/partd -f <path to video> -n <number of frames to skip> -t [0|1] -x <no of threads>`.
+
 ### Using MakeFile
 1. From the project root, run `make`
 2. Type `bin/runner -f <path_to_image_input>` in terminal to run `angle_correction.cpp`. The command line parameters have already been described in the previous section.
