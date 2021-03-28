@@ -89,10 +89,10 @@ int main(int argc, char* argv[]) {
         cout << "Time taken by Static queue density: " <<
              chrono::duration_cast<chrono::seconds>(t2 - t1).count() << " s\n";
 
-        DynamicDensity(vid_file, nth_frame);
-        auto t3 = chrono::high_resolution_clock::now();
-        cout << "Time taken by Dynamic queue density: " <<
-             chrono::duration_cast<chrono::seconds>(t3 - t2).count() << " s\n";
+        //DynamicDensity(vid_file, nth_frame);
+        //auto t3 = chrono::high_resolution_clock::now();
+        //cout << "Time taken by Dynamic queue density: " <<
+            // chrono::duration_cast<chrono::seconds>(t3 - t2).count() << " s\n";
     }
     else { // OpenMP to Parallise function execution. Input export OMP_NUM_THREADS=2 to use
         #pragma omp parallel default(none) shared(vid_file, nth_frame)
@@ -101,8 +101,8 @@ int main(int argc, char* argv[]) {
             #pragma omp task
             QueueDensity(vid_file, nth_frame);
 
-            #pragma omp task
-            DynamicDensity(vid_file, nth_frame);
+            //#pragma omp task
+            //DynamicDensity(vid_file, nth_frame);
         }
 
         auto t2 = chrono::high_resolution_clock::now();
@@ -242,14 +242,20 @@ int QueueDensity(const string& location, int nth_frame){
 
             // Finds the cropped image of the given frame
             frame = CropImage(frame);
+            frame.copyTo(fgMask);
 
             // Finds the difference between the present frame and empty frame
-            absdiff(frame, src_crop, fgMask);
+            //absdiff(frame, src_crop, fgMask);
 
             // rows denotes no of rows in output frame, col denotes no of columns in output frame
-            int row = fgMask.rows;
-            int col = fgMask.cols;
+            int row = frame.rows;
+            int col = frame.cols;
 
+            for(int p = 0; p < row; p++){
+                for(int q = 0; q < col; q++){
+                    fgMask.at<uchar>(p, q) = abs(frame.at<uchar>(p, q) - src_crop.at<uchar>(p, q));
+                }
+            }
             // Counts no of pixels whose pixel value is greater than 15
             double x =count(fgMask, row, col, 15);
 
