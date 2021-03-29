@@ -43,16 +43,26 @@ Assignment 1 for the course COP290. Details can be found [here](https://www.cse.
     ```
 4. Output files are stored in out folder in the project root 
 
-### Part 3: partc.cpp
-1.     ```
-    g++ src/partc.cpp -o build/partc -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs -fopenmp
+### Part 3:
+### Method - 1:
+1.  ```
+    g++ src/Method_1/Partc_Method_1.cpp -o build/Partc_Method_1 -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs
     ```
-2. Execute the program via `build/partc -f <path to video> -n <number of frames to skip> -t [0|1] -x <no of threads>`.
+2. Execute the program via `build/Partc_Method_1 -f <path to video> -n <number of frames to skip> -t [0|1]`.
 
-3. ```
-    g++ src/partd.cpp -o build/partd -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs -fopenmp
+### Method - 2:
+
+1.  ```
+    g++ src/Method_2/Partc_Method_2.cpp -o build/Partc_Method_2 -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs
     ```
-2. Execute the program via `build/partd -f <path to video> -n <number of frames to skip> -t [0|1] -x <no of threads>`.
+2. Execute the program via `build/Partc_Method_2 -f <path to video> -n <number of frames to skip> -t [0|1] -X <width of resoluted image> -Y <height of resoluted image>`.
+
+### Method - 4:
+
+1.  ```
+    g++ src/Method_4/Partc_Method_4.cpp -o build/Partc_Method_4 -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs
+    ```
+2. Execute the program via `build/Partc_Method_4 -f <path to video> -n <number of frames to skip> -t [0|1] -x <no of threads>`.
 
 ### Using MakeFile
 1. From the project root, run `make`

@@ -16,9 +16,6 @@
 #include <bits/stdc++.h>
 #include <boost/program_options.hpp>
 #include <experimental/filesystem>
-#include <cstdlib>
-#include <pthread.h>
-#include <unistd.h>
 
 using namespace cv;
 using namespace std;
@@ -92,7 +89,7 @@ int main(int argc, char* argv[]) {
         //DynamicDensity(vid_file, nth_frame);
         //auto t3 = chrono::high_resolution_clock::now();
         //cout << "Time taken by Dynamic queue density: " <<
-            // chrono::duration_cast<chrono::seconds>(t3 - t2).count() << " s\n";
+             //chrono::duration_cast<chrono::seconds>(t3 - t2).count() << " s\n";
     }
     else { // OpenMP to Parallise function execution. Input export OMP_NUM_THREADS=2 to use
         #pragma omp parallel default(none) shared(vid_file, nth_frame)
@@ -223,6 +220,8 @@ int QueueDensity(const string& location, int nth_frame){
     // Initialize matrices frame, fgMask
     int i = 1;
 
+    double temp = 0;
+
     Mat frame, fgMask;
 
     // Stores the value of no of contours in a frame
@@ -242,29 +241,29 @@ int QueueDensity(const string& location, int nth_frame){
 
             // Finds the cropped image of the given frame
             frame = CropImage(frame);
-            frame.copyTo(fgMask);
 
             // Finds the difference between the present frame and empty frame
-            //absdiff(frame, src_crop, fgMask);
+            absdiff(frame, src_crop, fgMask);
 
             // rows denotes no of rows in output frame, col denotes no of columns in output frame
-            int row = frame.rows;
-            int col = frame.cols;
+            int row = fgMask.rows;
+            int col = fgMask.cols;
 
-            for(int p = 0; p < row; p++){
-                for(int q = 0; q < col; q++){
-                    fgMask.at<uchar>(p, q) = abs(frame.at<uchar>(p, q) - src_crop.at<uchar>(p, q));
-                }
-            }
             // Counts no of pixels whose pixel value is greater than 15
             double x =count(fgMask, row, col, 15);
 
             // Add the output to the output vector 
+            temp = x;
             y.push_back(x);
             
         }
-        else
+        else{
             capture >> frame;
+            if(frame.empty()){
+                break;
+            }
+            y.push_back(temp);
+        }
         
         i++;
     }
@@ -286,7 +285,7 @@ double count (Mat frame, int rows, int cols, int threshold){
     int count = 0;
     for (int i = 0; i < rows; i++){
         for(int j = 0; j < cols; j++){
-            if(frame.at<double>(i, j) > threshold){
+            if(frame.at<uchar>(i, j) > threshold){
                 count++;
             }
         }
@@ -358,32 +357,33 @@ void writeInFile(vector<double> y, string filename){
 int writeOut() {
     ofstream out_file(OUT_PATH + pathSeparator + "out.csv");
     ifstream queue(OUT_PATH + pathSeparator + "QueueDensity.txt");
-    ifstream dynamic(OUT_PATH + pathSeparator + "DynamicDensity.txt");
-    out_file << "framenum, queue density, dynamic density\n";
-    cout << "framenum, queue density, dynamic density\n";
+    ifstream baseline("../COP290/assets/baseline.txt");
+    //ifstream dynamic(OUT_PATH + pathSeparator + "DynamicDensity.txt");
+    out_file << "Time(in sec), queue density\n";
+    //cout << "framenum, queue density\n";
     int i=0;
-
-    if (!queue || !dynamic)
+    double error = 0;
+    double base, out;
+    if (!queue)
     {
-        std::cout << "Error opening file " << (queue ? "Dynamic": "Queue") << ": " << strerror(errno) << '\n';
+        std::cout << "Error opening file Queue" << ": " << strerror(errno) << '\n';
         return 1;
     }
 
     do
     {
-        string line1, line2;
-        if(!getline(queue, line1))
-            line1 = "0";
-        if(!getline(dynamic, line2))
-            line2 = "0";
-        string res = to_string(i) + ", " + line1 + ", " + line2 + "\n";
-        cout << res;
+        string res = to_string((double)i/(double)15) + ", " + to_string(out) + "\n";
+        error = error + pow(base - out, 2.0);
         out_file << res;
         i++;
-    } while(queue || dynamic);
+    } while(queue >> out && baseline >> base);
 
+    error = error / (double)5737;
+    error = pow(error, 0.5);
+    cout << "Error :" << error << endl;
     out_file.close();
     queue.close();
-    dynamic.close();
+    baseline.close();
+    //dynamic.close();
     return 0;
 }
