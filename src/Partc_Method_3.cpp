@@ -16,17 +16,33 @@
 #include <bits/stdc++.h>
 #include <boost/program_options.hpp>
 #include <experimental/filesystem>
+#include <cstdlib>
+#include <pthread.h>
+#include <unistd.h>
 
 using namespace cv;
 using namespace std;
 namespace po = boost::program_options;
 
-int QueueDensity(const string& location, int nth_frame);
+int QueueDensity(const string& location, int nth_frame, int num_threads);
 Mat CropImage(Mat frame);
 void writeInFile(vector<double> y, string filename);
-int DynamicDensity(const string& location, int nth_frame);
-double count (Mat frame, int rows, int cols, int threshold);
+int DynamicDensity(const string& location, int nth_frame, int num_threads);
+int count (Mat frame,  int start,int rows, int cols, int threshold);
 int writeOut();
+void *ProcessFrame(void *thrd);
+
+// Opens the empty frame
+Mat src_colour = imread("../COP290/assets/empty_final.jpg");
+// Finds the cropped image of the input image
+Mat src_crop = CropImage(src_colour);
+
+struct thread_data{
+    Mat frame;
+    Mat dest_frame;
+    int threads;
+    int cur_thread;
+};
 
 const String OUT_PATH = "out";
 const char pathSeparator =
@@ -35,6 +51,7 @@ const char pathSeparator =
 #else
         '/';
 #endif
+
 
 /**
  * Location of the input video file has to be given by command line argument
@@ -45,7 +62,7 @@ const char pathSeparator =
 int main(int argc, char* argv[]) {
     po::options_description desc("Allowed options");
     string vid_file;
-    int nth_frame, parallel;
+    int nth_frame, parallel, num_threads;
     desc.add_options()
             ("help,h", "Print help message")
             ("file,f", po::value(&vid_file)->required(),"Path to Video file")
@@ -53,6 +70,8 @@ int main(int argc, char* argv[]) {
                                                                         "every Nth frame of the video. Default Value: 3")
             ("threads,t", po::value<int>(&parallel)->default_value(0), "Set 1 for Parallel execution "
                                    "using OpenMP and 0 for Serial Execution. Default Value: 0. Type export OMP_NUM_THREADS=2 in terminal before compiling.")
+            ("numThreads,x", po::value<int>(&num_threads)->default_value(1), "Decides no of threads "
+                                   "using pthreads for parallel execution. Default Value: 1.")
             ;
     po::variables_map vm;
     try {
@@ -80,26 +99,26 @@ int main(int argc, char* argv[]) {
     auto t1 = chrono::high_resolution_clock::now();
 
     if(parallel == 0) { // Serial code execution
-        QueueDensity(vid_file, nth_frame);
+        QueueDensity(vid_file, nth_frame, num_threads);
 
         auto t2 = chrono::high_resolution_clock::now();
         cout << "Time taken by Static queue density: " <<
              chrono::duration_cast<chrono::seconds>(t2 - t1).count() << " s\n";
 
-        DynamicDensity(vid_file, nth_frame);
-        auto t3 = chrono::high_resolution_clock::now();
-        cout << "Time taken by Dynamic queue density: " <<
-             chrono::duration_cast<chrono::seconds>(t3 - t2).count() << " s\n";
+        //DynamicDensity(vid_file, nth_frame, num_threads);
+        //auto t3 = chrono::high_resolution_clock::now();
+        //cout << "Time taken by Dynamic queue density: " <<
+            // chrono::duration_cast<chrono::seconds>(t3 - t2).count() << " s\n";
     }
     else { // OpenMP to Parallise function execution. Input export OMP_NUM_THREADS=2 to use
-        #pragma omp parallel default(none) shared(vid_file, nth_frame)
+        #pragma omp parallel default(none) shared(vid_file, nth_frame, num_threads)
         #pragma omp single
         {
             #pragma omp task
-            QueueDensity(vid_file, nth_frame);
+            QueueDensity(vid_file, nth_frame, num_threads);
 
-            #pragma omp task
-            DynamicDensity(vid_file, nth_frame);
+           // #pragma omp task
+            //DynamicDensity(vid_file, nth_frame, num_threads);
         }
 
         auto t2 = chrono::high_resolution_clock::now();
@@ -107,7 +126,6 @@ int main(int argc, char* argv[]) {
              chrono::duration_cast<chrono::seconds>( t2 - t1 ).count()<<" s\n";
     }
     writeOut();
-
     return 0;
 }
 
@@ -117,7 +135,7 @@ int main(int argc, char* argv[]) {
  * @param nth_frame
  * @return Finds the density of moving objects
  */
-int DynamicDensity(const string& location, int nth_frame){
+int DynamicDensity(const string& location, int nth_frame, int num_threads){
 
     // Opens the video file
     VideoCapture capture(location);
@@ -172,7 +190,7 @@ int DynamicDensity(const string& location, int nth_frame){
             int cols = out.cols;
 
             // Counts no of pixels whose pixel value is greater than 20
-            double count_pix = count(out, rows, cols, 20);
+            double count_pix = count(out, 0, rows, cols, 20);
 
             // Add the output to the output vector
             y.push_back(count_pix*1.5);
@@ -197,30 +215,33 @@ int DynamicDensity(const string& location, int nth_frame){
   *
   * @param location : location of the video file
   * @param nth_frame
+  * @param num_threads
   * @return
   */
-int QueueDensity(const string& location, int nth_frame){
-
-    // Opens the empty frame
-    Mat src_colour = imread("../COP290/assets/empty_final.jpg");
-
-    // Finds the cropped image of the input image
-    Mat src_crop = CropImage(src_colour);
+int QueueDensity(const string& location, int nth_frame, int num_threads){
 
     // Opens the video file
     VideoCapture capture(location);
 
     // If not able to open the video file, exit the program
+    
     if (!capture.isOpened()){
         cout << "Unable to open the video file" << endl;
         cin.get();
         return -1;
     }
-
+    
     // Initialize matrices frame, fgMask
     int i = 1;
+    Mat frame, fgMask;;
 
-    Mat frame, fgMask;
+    pthread_t threads[num_threads];
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+    int rc;
+    int j;
+    void *x;
 
     // Stores the value of no of contours in a frame
     std::vector<double> y;
@@ -237,33 +258,99 @@ int QueueDensity(const string& location, int nth_frame){
             if (frame.empty())
                 break;
 
-            // Finds the cropped image of the given frame
+            // Create threads
+            struct thread_data thrd[num_threads];
             frame = CropImage(frame);
-
-            // Finds the difference between the present frame and empty frame
-            absdiff(frame, src_crop, fgMask);
-
-            // rows denotes no of rows in output frame, col denotes no of columns in output frame
-            int row = fgMask.rows;
-            int col = fgMask.cols;
-
-            // Counts no of pixels whose pixel value is greater than 15
-            double x =count(fgMask, row, col, 15);
-
-            // Add the output to the output vector 
-            y.push_back(x);
+            vector<long> thrd_output;
+            frame.copyTo(fgMask);
             
+            // Give each thread, the current frame, destination frame and thrd id as arguments
+            for(int j = 0; j < num_threads; j++){
+                thrd[j].frame = frame;
+                thrd[j].dest_frame = fgMask;
+                thrd[j].threads = num_threads;
+                thrd[j].cur_thread = j;
+                int rc = pthread_create(&threads[j], &attr, ProcessFrame, (void *)&thrd[j]);
+                if (rc) {
+                    cout << "Error:unable to create thread," << rc << endl;
+                    exit(-1);
+                }
+            }
+            
+            // Join all the threads and place the output values in a vector
+            pthread_attr_destroy(&attr);
+            for(int j = 0; j < num_threads; j++){
+                int rc = pthread_join( threads[j], &x);
+                if (rc) {
+                    cout << "Error:unable to join," << rc << endl;
+                    exit(-1);
+                }
+                thrd_output.push_back((long)x);
+            }
+            // Sum the output of all the threads
+            double x = (double)accumulate(thrd_output.begin(), thrd_output.end(), 0)/(double)(frame.rows*frame.cols);
+
+            // Place the output in vector y
+            y.push_back(x);
         }
-        else
+
+        else{
             capture >> frame;
-        
+        }
+
         i++;
     }
 
-    // Calls Density function
-     writeInFile(y, OUT_PATH + pathSeparator + "QueueDensity.txt");
+    writeInFile(y, OUT_PATH + pathSeparator + "QueueDensity.txt");
 
     return 0;
+}
+/*
+ * Process the selected rows in the given frame
+ * @param thrd: contains the data of cur frame, dest frame and thread id
+*/
+void *ProcessFrame(void *thrd){
+
+    struct thread_data *thrd_data = (struct thread_data *) thrd;
+    
+    // Current frame
+    Mat frame = thrd_data->frame;
+
+    // Destination frame
+    Mat fgMask = thrd_data->dest_frame;
+    
+    // Find the rows that current thread has to process
+    int cur_thread = thrd_data->cur_thread;
+    int temp = (frame.rows)/(thrd_data->threads);
+    int start_row = cur_thread*temp;
+    int end_row = (cur_thread + 1)*temp;
+    int col = frame.cols;
+
+    if(cur_thread == (thrd_data->threads) - 1){
+        end_row = frame.rows;
+    }
+
+    // Procces the rows
+    for(int i = start_row; i < end_row; i++){
+        for(int j = 0; j < col; j++){
+            fgMask.at<uchar>(i, j) = abs(frame.at<uchar>(i, j) - src_crop.at<uchar>(i, j)); 
+        }
+    }
+
+    // Counts no of pixels whose pixel value is greater than 15
+    int count = 0;
+    for (int i = start_row; i < end_row; i++){
+        for(int j = 0; j < col; j++){
+            if(fgMask.at<uchar>(i, j) > 15){
+                count++;
+            }
+        }
+    }
+    //int x = count(fgMask, start_row, end_row, col, 15);
+
+    // Add the output to the output vector 
+    pthread_exit((void *)count);
+    
 }
 
 /**
@@ -272,17 +359,17 @@ int QueueDensity(const string& location, int nth_frame){
  * @param row: no of rows in the frame
  * @param cols: no of columns in the frame
  */
-double count (Mat frame, int rows, int cols, int threshold){
+int count (Mat frame, int start, int rows, int cols, int threshold){
 
     int count = 0;
-    for (int i = 0; i < rows; i++){
+    for (int i = start; i < rows; i++){
         for(int j = 0; j < cols; j++){
             if(frame.at<uchar>(i, j) > threshold){
                 count++;
             }
         }
     }
-    return (double)count/double(rows*cols);
+    return count;
 }
 
 /**
@@ -349,32 +436,33 @@ void writeInFile(vector<double> y, string filename){
 int writeOut() {
     ofstream out_file(OUT_PATH + pathSeparator + "out.csv");
     ifstream queue(OUT_PATH + pathSeparator + "QueueDensity.txt");
-    ifstream dynamic(OUT_PATH + pathSeparator + "DynamicDensity.txt");
-    out_file << "framenum, queue density, dynamic density\n";
-    cout << "framenum, queue density, dynamic density\n";
+    ifstream baseline("../COP290/assets/baseline.txt");
+    //ifstream dynamic(OUT_PATH + pathSeparator + "DynamicDensity.txt");
+    out_file << "Time(in sec), queue density\n";
+    //cout << "framenum, queue density\n";
     int i=0;
-
-    if (!queue || !dynamic)
+    double error = 0;
+    double base, out;
+    if (!queue)
     {
-        std::cout << "Error opening file " << (queue ? "Dynamic": "Queue") << ": " << strerror(errno) << '\n';
+        std::cout << "Error opening file Queue" << ": " << strerror(errno) << '\n';
         return 1;
     }
 
     do
     {
-        string line1, line2;
-        if(!getline(queue, line1))
-            line1 = "0";
-        if(!getline(dynamic, line2))
-            line2 = "0";
-        string res = to_string(i) + ", " + line1 + ", " + line2 + "\n";
-        cout << res;
+        string res = to_string((double)i/(double)15) + ", " + to_string(out) + "\n";
+        error = error + pow(base - out, 2.0);
         out_file << res;
         i++;
-    } while(queue || dynamic);
+    } while(queue >> out && baseline >> base);
 
+    error = error / (double)5737;
+    error = pow(error, 0.5);
+    cout << "Error :" << error << endl;
     out_file.close();
     queue.close();
-    dynamic.close();
+    baseline.close();
+    //dynamic.close();
     return 0;
 }

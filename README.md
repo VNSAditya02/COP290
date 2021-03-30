@@ -43,6 +43,34 @@ Assignment 1 for the course COP290. Details can be found [here](https://www.cse.
     ```
 4. Output files are stored in out folder in the project root 
 
+### Part 3:
+### Method - 1:
+1.  ```
+    g++ src/Partc_Method_1.cpp -o build/Partc_Method_1 -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs
+    ```
+2. Execute the program via `build/Partc_Method_1 -f <path to video> -n <number of frames to skip> -t [0|1]`.
+
+### Method - 2:
+
+1.  ```
+    g++ src/Partc_Method_2.cpp -o build/Partc_Method_2 -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs
+    ```
+2. Execute the program via `build/Partc_Method_2 -f <path to video> -n <number of frames to skip> -t [0|1] -X <width of resoluted image> -Y <height of resoluted image>`.
+
+### Method - 3:
+
+1.  ```
+    g++ src/Partc_Method_3.cpp -o build/Partc_Method_3 -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs
+    ```
+2. Execute the program via `build/Partc_Method_3 -f <path to video> -n <number of frames to skip> -t [0|1] -x <no of threads>`.
+
+### Method - 4:
+
+1.  ```
+    g++ src/Partc_Method_4.cpp -o build/Partc_Method_4 -lpthread -std=c++11 `pkg-config --cflags --libs opencv` -lboost_program_options -lstdc++fs
+    ```
+2. Execute the program via `build/Partc_Method_4 -f <path to video> -n <number of frames to skip> -t [0|1] -x <no of threads>`.
+
 ### Using MakeFile
 1. From the project root, run `make`
 2. Type `bin/runner -f <path_to_image_input>` in terminal to run `angle_correction.cpp`. The command line parameters have already been described in the previous section.
