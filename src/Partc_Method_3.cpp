@@ -42,9 +42,6 @@ struct thread_data{
     Mat dest_frame;
     int threads;
     int cur_thread;
-    /*int start_row;
-    int end_row;
-    int cols;*/
 };
 
 const String OUT_PATH = "out";
@@ -218,6 +215,7 @@ int DynamicDensity(const string& location, int nth_frame, int num_threads){
   *
   * @param location : location of the video file
   * @param nth_frame
+  * @param num_threads
   * @return
   */
 int QueueDensity(const string& location, int nth_frame, int num_threads){
@@ -260,11 +258,13 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
             if (frame.empty())
                 break;
 
+            // Create threads
             struct thread_data thrd[num_threads];
             frame = CropImage(frame);
             vector<long> thrd_output;
             frame.copyTo(fgMask);
             
+            // Give each thread, the current frame, destination frame and thrd id as arguments
             for(int j = 0; j < num_threads; j++){
                 thrd[j].frame = frame;
                 thrd[j].dest_frame = fgMask;
@@ -277,6 +277,7 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
                 }
             }
             
+            // Join all the threads and place the output values in a vector
             pthread_attr_destroy(&attr);
             for(int j = 0; j < num_threads; j++){
                 int rc = pthread_join( threads[j], &x);
@@ -286,8 +287,10 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
                 }
                 thrd_output.push_back((long)x);
             }
+            // Sum the output of all the threads
             double x = (double)accumulate(thrd_output.begin(), thrd_output.end(), 0)/(double)(frame.rows*frame.cols);
-            //cout << x << " " << i << endl;
+
+            // Place the output in vector y
             y.push_back(x);
         }
 
@@ -302,18 +305,21 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
 
     return 0;
 }
-
+/*
+ * Process the selected rows in the given frame
+ * @param thrd: contains the data of cur frame, dest frame and thread id
+*/
 void *ProcessFrame(void *thrd){
 
     struct thread_data *thrd_data = (struct thread_data *) thrd;
     
-
-    // Finds the cropped image of the given frame
+    // Current frame
     Mat frame = thrd_data->frame;
 
-    //frame.copyTo(fgMask);
+    // Destination frame
     Mat fgMask = thrd_data->dest_frame;
     
+    // Find the rows that current thread has to process
     int cur_thread = thrd_data->cur_thread;
     int temp = (frame.rows)/(thrd_data->threads);
     int start_row = cur_thread*temp;
@@ -324,6 +330,7 @@ void *ProcessFrame(void *thrd){
         end_row = frame.rows;
     }
 
+    // Procces the rows
     for(int i = start_row; i < end_row; i++){
         for(int j = 0; j < col; j++){
             fgMask.at<uchar>(i, j) = abs(frame.at<uchar>(i, j) - src_crop.at<uchar>(i, j)); 
@@ -429,32 +436,33 @@ void writeInFile(vector<double> y, string filename){
 int writeOut() {
     ofstream out_file(OUT_PATH + pathSeparator + "out.csv");
     ifstream queue(OUT_PATH + pathSeparator + "QueueDensity.txt");
-    ifstream dynamic(OUT_PATH + pathSeparator + "DynamicDensity.txt");
-    out_file << "framenum, queue density, dynamic density\n";
-    cout << "framenum, queue density, dynamic density\n";
+    ifstream baseline("../COP290/assets/baseline.txt");
+    //ifstream dynamic(OUT_PATH + pathSeparator + "DynamicDensity.txt");
+    out_file << "Time(in sec), queue density\n";
+    //cout << "framenum, queue density\n";
     int i=0;
-
-    if (!queue || !dynamic)
+    double error = 0;
+    double base, out;
+    if (!queue)
     {
-        std::cout << "Error opening file " << (queue ? "Dynamic": "Queue") << ": " << strerror(errno) << '\n';
+        std::cout << "Error opening file Queue" << ": " << strerror(errno) << '\n';
         return 1;
     }
 
     do
     {
-        string line1, line2;
-        if(!getline(queue, line1))
-            line1 = "0";
-        if(!getline(dynamic, line2))
-            line2 = "0";
-        string res = to_string(i) + ", " + line1 + ", " + line2 + "\n";
-        cout << res;
+        string res = to_string((double)i/(double)15) + ", " + to_string(out) + "\n";
+        error = error + pow(base - out, 2.0);
         out_file << res;
         i++;
-    } while(queue || dynamic);
+    } while(queue >> out && baseline >> base);
 
+    error = error / (double)5737;
+    error = pow(error, 0.5);
+    cout << "Error :" << error << endl;
     out_file.close();
     queue.close();
-    dynamic.close();
+    baseline.close();
+    //dynamic.close();
     return 0;
 }

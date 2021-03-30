@@ -317,6 +317,10 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
     return 0;
 }
 
+/*
+ * Process the frame
+ * @param thrd: contains the data of cur frame
+*/
 void *ProcessFrame(void *thrd){
 
     struct thread_data *thrd_data = (struct thread_data *) thrd;
