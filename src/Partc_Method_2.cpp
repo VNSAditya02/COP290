@@ -1,5 +1,5 @@
 /**
- * @file Partc_Method_2.cpp
+ * @file traffic_density.cpp
  *
  * @brief This file outputs a warped and a cropped Homomorphised and greyscale version of the input RGB Image
  *
@@ -22,7 +22,7 @@ using namespace std;
 namespace po = boost::program_options;
 
 int QueueDensity(const string& location, int nth_frame, int width, int height);
-Mat CropImage(Mat frame);
+Mat CropImage(Mat frame, int width, int height, int y, int x);
 void writeInFile(vector<double> y, string filename);
 int DynamicDensity(const string& location, int nth_frame);
 double count (Mat frame, int rows, int cols, int threshold);
@@ -143,7 +143,7 @@ int DynamicDensity(const string& location, int nth_frame){
     capture >> frame;
 
     // Crop the previous frame
-    frame = CropImage(frame);
+    //frame = CropImage(frame);
 
     // Stores the output values
     vector <double> y;
@@ -166,7 +166,7 @@ int DynamicDensity(const string& location, int nth_frame){
             }
 
             // Crop the present frame
-            frame2 = CropImage(frame2);
+            //frame2 = CropImage(frame2);
 
             // Finds the difference between the current and previous frames
             absdiff(frame2, frame, out);
@@ -209,12 +209,15 @@ int QueueDensity(const string& location, int nth_frame, int width, int height){
 
     // Opens the empty frame
     Mat src_colour = imread("../COP290/assets/empty_final.jpg");
+    int p = src_colour.rows;
+    int q = src_colour.cols;
 
-    // Finds the cropped image of the input image
-    Mat src_crop = CropImage(src_colour);
+    // Find resoluted image
+    resize(src_colour, src_colour, Size(width, height));
 
-    resize(src_crop, src_crop, Size(width, height));
-
+    // Finds the cropped image of the resoluted image
+    Mat src_crop = CropImage(src_colour, width, height, q, p);
+    
     // Opens the video file
     VideoCapture capture(location);
 
@@ -247,15 +250,17 @@ int QueueDensity(const string& location, int nth_frame, int width, int height){
             if (frame.empty())
                 break;
 
-            // Finds the cropped image of the given frame
-            frame = CropImage(frame);
-
+            p = frame.rows;
+            q = frame.cols;
             // Resolution of frame
             resize(frame, frame, Size(width, height));
 
+            // Finds the cropped image of the given frame
+            frame = CropImage(frame, width, height, q, p);
+
             // Finds the difference between the present frame and empty frame
             absdiff(frame, src_crop, fgMask);
-
+            
             // rows denotes no of rows in output frame, col denotes no of columns in output frame
             int row = fgMask.rows;
             int col = fgMask.cols;
@@ -309,24 +314,29 @@ double count (Mat frame, int rows, int cols, int threshold){
  * @param frame
  * @return : frame to be cropped
  */
-Mat CropImage(Mat frame){
+Mat CropImage(Mat frame, int width, int height, int y, int x){
 
     // Stores the wrapped image
     Mat img_warp, img_crop;
 
     // These points are taken from Riju Ma'am's website
+    int a = width*472/y;
+    int b = width*800/y;
+    int c = height*52/x;
+    int d = height*830/x;
+
     vector<Point2f> dest_pts;
-    dest_pts.emplace_back(Point2f(472, 52));
-    dest_pts.emplace_back(Point2f(472, 830));
-    dest_pts.emplace_back(Point2f(800, 830));
-    dest_pts.emplace_back(Point2f(800, 52));
+    dest_pts.emplace_back(Point2f(a, c));
+    dest_pts.emplace_back(Point2f(a, d));
+    dest_pts.emplace_back(Point2f(b, d));
+    dest_pts.emplace_back(Point2f(b, c));
 
     // This part of the image is our area of interest. I approximated these points
     vector<Point2f> src_pts;
-    src_pts.emplace_back(1000, 216);
-    src_pts.emplace_back(286, 1060);
-    src_pts.emplace_back(1552, 1070);
-    src_pts.emplace_back(1264, 200);
+    src_pts.emplace_back(1000*width/y, 216*height/x);
+    src_pts.emplace_back(286*width/y, 1060*height/x);
+    src_pts.emplace_back(1552*width/y, 1070*height/x);
+    src_pts.emplace_back(1264*width/y, 200*height/x);
 
     // Finding Homography between the points
     Mat homography = findHomography(src_pts, dest_pts);
@@ -336,7 +346,7 @@ Mat CropImage(Mat frame){
 
     // Convert the frame into cropped image
     warpPerspective(frame, img_warp, homography, frame.size());
-    img_crop = img_warp(Rect(472, 52, 328, 778));
+    img_crop = img_warp(Rect(a, c, b - a, d - c));
 
     // returns the cropped image
     return img_crop;
