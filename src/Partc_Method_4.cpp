@@ -336,7 +336,7 @@ void *ProcessFrame(void *thrd){
     int x =count(fgMask, 0, row, col, 15);
 
     // Exit from the thread
-    pthread_exit((void *)x);
+    pthread_exit((void *)(unsigned long long)x);
     
 }
 

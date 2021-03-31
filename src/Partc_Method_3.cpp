@@ -349,7 +349,7 @@ void *ProcessFrame(void *thrd){
     //int x = count(fgMask, start_row, end_row, col, 15);
 
     // Add the output to the output vector 
-    pthread_exit((void *)count);
+    pthread_exit((void *)(unsigned long long)count);
     
 }
 
