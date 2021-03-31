@@ -245,9 +245,6 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
     int is_complete[num_threads];
 
     pthread_t threads[num_threads];
-    //pthread_attr_t attr;
-    //pthread_attr_init(&attr);
-    //pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
     int rc;
     int j;
     void *x;
@@ -270,15 +267,12 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
             // Create threads
             struct thread_data thrd[num_threads];
             vector<long> thrd_output;
-            //frame.copyTo(fgMask);
             
             // Give each thread, the current frame, destination frame and thrd id as arguments
             for(int j = 0; j < num_threads; j++){
                 Mat fgMask, src_temp;
-                //Mat frame = thrd_data->frame;
                 thrd[j].frame = frame;
                 thrd[j].source = src_colour;
-                //thrd[j].dest_frame = fgMask;
                 thrd[j].threads = num_threads;
                 thrd[j].cur_thread = j;
                 int rc = pthread_create(&threads[j], NULL, ProcessFrame, (void *)&thrd[j]);
@@ -290,7 +284,6 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
             
             
             // Join all the threads and place the output values in a vector
-            //pthread_attr_destroy(&attr);
             for(int j = 0; j < num_threads; j++){
 
                 int rc = pthread_join( threads[j], &x);
@@ -298,16 +291,14 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
                     cout << "Error:unable to join," << rc << endl;
                     exit(-1);
                 }
-                //cout << (long) x << endl;
                 thrd_output.push_back((long)x);
             }
 
+            // Find the total number of rows in the output image
             if(yes == 0){
                 for(int k = 0; k < num_threads; k++){
-                    //cout << "here" << endl;
                     if(!src_crop[k].empty()){
                         rows = rows + src_crop[k].rows;
-                        //cout << "rows" << src_crop[k].rows;
                     }
                     else{
                         continue;
@@ -315,17 +306,13 @@ int QueueDensity(const string& location, int nth_frame, int num_threads){
                 }
                 yes = 1;
             }
-            //cout << "bye" << endl;
-            //cout << (long) x << endl;
-            //cout << rows << endl;
+
+            // Sum all the outputs of different threads
             double x = (double)accumulate(thrd_output.begin(), thrd_output.end(), 0)/(double)(rows*328);
-            //double l = 0;
-            // Place the output in vector y
-            
-            //cout << "Going to exit... " << x << endl;
-            //exit(-1);
+
+            // Store the final output in a vector
             y.push_back(x);
-            //exit(-1);
+
         }
 
         else{
@@ -353,19 +340,12 @@ void *ProcessFrame(void *thrd){
 
     struct thread_data *thrd_data = (struct thread_data *) thrd;
     
-    // Current frame
+    // Current frame, Source Frame
     Mat frame_2;
     Mat frame = thrd_data->frame;
     Mat source = thrd_data ->source;
-
-    //frame.copyTo(fgMask);
-    //src_colour.copyTo(src_temp);
-
-    // Destination frame
     
     // Find the rows that current thread has to process
-    int i = 0;
-    //int j = 0;
     int cur_thread = thrd_data->cur_thread;
     int temp = (frame.rows)/(thrd_data->threads);
     int start_row = cur_thread*temp;
@@ -376,21 +356,21 @@ void *ProcessFrame(void *thrd){
         end_row = frame.rows;
     }
 
+    // Crop the original frame as required
     frame = frame(Rect(0, start_row, frame.cols, end_row - start_row));
     source = source(Rect(0, start_row, src_colour.cols, end_row - start_row));
-    /*if(B[cur_thread] == 0){
-        sources[cur_thread] = source(Rect(0, start_row, src_colour.cols, end_row - start_row));
-        B[cur_thread] = 1;
-    }*/
     
-
     int count = 0;
+
+    // If the cropped part lies out of the area of interest, return 0
     if(end_row <= 215){
         pthread_exit((void *)(unsigned long long)count);
     }
     else if(start_row >= 1070){
         pthread_exit((void *)(unsigned long long)count);
     }
+
+    // Else find the angle correction of the required part
     else if(start_row > 215 && end_row > 1070){
         
         int contrib = ((1070 - start_row)*778/855) + 1;
@@ -399,7 +379,6 @@ void *ProcessFrame(void *thrd){
             src_crop[cur_thread] = CropImage(source, (int)line1(start_row), (int)line1(1070), (int)line2(1070), (int)line2(start_row), 0, 1069 - start_row, 1069 - start_row, 0, 0, contrib);
             A[cur_thread] = 1;
         }
-        i = 1;
     }
     else if(start_row < 215 && end_row < 1070){
         
@@ -410,7 +389,6 @@ void *ProcessFrame(void *thrd){
             src_crop[cur_thread] = CropImage(source, (int)line1(215), (int)line1(end_row - 1), (int)line2(end_row - 1), (int)line2(215), 214 - start_row, end_row - start_row - 1, end_row - start_row - 1, 214 - start_row, x, x + contrib);
             A[cur_thread] == 1;
         }
-        i = 2;
     }
     else if(start_row < 215 && end_row > 1070){
         int contrib = ((end_row - start_row)*778/855) + 1;
@@ -428,9 +406,9 @@ void *ProcessFrame(void *thrd){
             src_crop[cur_thread] = CropImage(source, (int)line1(start_row), (int)line1(end_row - 1), (int)line2(end_row - 1), (int)line2(start_row), 0, end_row - start_row - 1, end_row - start_row - 1, 0, 0, contrib);
             A[cur_thread] = 1;
         }
-        i = 3;
     }
-    // Procces the rows 
+
+    // Find number of pixels whose value is greater than the threshold 15
     for(int p = 0; p < frame.rows; p++){
         for(int j = 0; j < col; j++){
             if (abs(frame_2.at<uchar>(p, j) - src_crop[cur_thread].at<uchar>(p, j)) > 15){
@@ -438,6 +416,8 @@ void *ProcessFrame(void *thrd){
             }   
         }
     }
+
+    // Exit the thread
     pthread_exit((void *)(unsigned long long)count);
     
 }
@@ -464,6 +444,9 @@ int count (Mat frame, int start, int rows, int cols, int threshold){
 /**
  * Given a frame, this function crops and outputs the cropped frame
  * @param frame
+ * @param c1, c2, c3, c4: Column values for area of interest
+ * @param r1, r2, r3, r4: Row values for area of interst
+ * @param i, j: Row values used in homography
  * @return : frame to be cropped
  */
 Mat CropImage(Mat frame, int c1, int c2, int c3, int c4, int r1, int r2, int r3, int r4, int i, int j){
@@ -484,22 +467,17 @@ Mat CropImage(Mat frame, int c1, int c2, int c3, int c4, int r1, int r2, int r3,
     src_pts.emplace_back(c2, r2);
     src_pts.emplace_back(c3, r3);
     src_pts.emplace_back(c4, r4);
-    //cout << "bye1" << endl;
+
     // Finding Homography between the points
     Mat homography = findHomography(src_pts, dest_pts);
     
     // Convert frame to Grayscale
     cvtColor(frame, frame, COLOR_BGR2GRAY);
-    //imshow("frame", frame);
-    //waitKey(0);
-    // Convert the frame into cropped image
+
     warpPerspective(frame, img_warp, homography, frame.size());
 
     img_crop = img_warp(Rect(472, i, 328, j - i));
-    //imshow("frame", img_crop);
-    //waitKey(0);
-    //cout << "bye2" << endl;
-    // returns the cropped image
+
     return img_crop;
 }
 
