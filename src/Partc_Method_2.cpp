@@ -1,5 +1,5 @@
 /**
- * @file traffic_density.cpp
+ * @file Partc_Method_2.cpp
  *
  * @brief This file outputs a warped and a cropped Homomorphised and greyscale version of the input RGB Image
  *
